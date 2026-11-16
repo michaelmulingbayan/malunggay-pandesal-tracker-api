@@ -2,7 +2,10 @@
 
 namespace Database\Factories;
 
+use App\Models\Production;
+use App\Models\Rider;
 use App\Models\StockDistribution;
+use App\Models\User;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -18,7 +21,11 @@ class StockDistributionFactory extends Factory
     public function definition(): array
     {
         return [
-            //
+            'production_id' => Production::factory(),
+            'rider_id' => Rider::factory(),
+            'quantity_distributed' => fake()->numberBetween(50, 200),
+            'distribution_date' => today(),
+            'distributed_by' => User::factory()->admin(),
         ];
     }
 }

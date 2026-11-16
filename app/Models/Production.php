@@ -2,8 +2,11 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Database\Factories\ProductionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -26,6 +29,15 @@ class Production extends Model
             'production_date' => 'date',
             'quantity_produced' => 'integer',
         ];
+    }
+
+    /**
+     * Scope a query to productions made on the given date.
+     */
+    #[Scope]
+    protected function producedOn(Builder $query, CarbonInterface|string $date): void
+    {
+        $query->whereDate('production_date', $date);
     }
 
     /**

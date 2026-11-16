@@ -2,8 +2,11 @@
 
 namespace App\Models;
 
+use Carbon\CarbonInterface;
 use Database\Factories\StockDistributionFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\Scope;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -26,6 +29,15 @@ class StockDistribution extends Model
             'quantity_distributed' => 'integer',
             'distribution_date' => 'date',
         ];
+    }
+
+    /**
+     * Scope a query to distributions made on the given date.
+     */
+    #[Scope]
+    protected function distributedOn(Builder $query, CarbonInterface|string $date): void
+    {
+        $query->whereDate('distribution_date', $date);
     }
 
     /**
