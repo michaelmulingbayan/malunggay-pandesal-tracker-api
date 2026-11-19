@@ -10,11 +10,41 @@ use App\Models\Sale;
 use App\Models\StockDistribution;
 use App\StockReturnStatus;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
+use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Validation\ValidationException;
 
 class SaleController extends Controller
 {
+    /**
+     * Every recorded sale with its rider, newest first. Optionally only one day and/or one rider.
+     */
+    public function index(Request $request): AnonymousResourceCollection
+    {
+        Gate::authorize('viewAny', Sale::class);
+
+        $validated = $request->validate([
+            'date' => ['nullable', 'date_format:Y-m-d'],
+            'rider_id' => ['nullable', 'integer', 'exists:riders,id'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $sales = Sale::query()
+            ->with('stockDistribution.rider.user')
+            ->when($validated['date'] ?? null, fn ($query, string $date) => $query->whereDate('sale_date', $date))
+            ->when($validated['rider_id'] ?? null, fn ($query, int $riderId) => $query->whereHas(
+                'stockDistribution',
+                fn ($distribution) => $distribution->where('rider_id', $riderId),
+            ))
+            ->latest('sale_date')
+            ->latest('id')
+            ->paginate($validated['per_page'] ?? 30);
+
+        return SaleResource::collection($sales);
+    }
+
     /**
      * Record a sale from a rider's assigned stock.
      *

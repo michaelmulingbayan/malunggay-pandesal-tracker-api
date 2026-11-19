@@ -169,3 +169,62 @@ describe('sales summary', function () {
         $this->getJson(route('api.v1.sales.summary'))->assertForbidden();
     });
 });
+
+describe('listing sales', function () {
+    test('admin sees every sale with its rider, newest first', function () {
+        Sanctum::actingAs(User::factory()->admin()->create());
+        $ana = Rider::factory()->for(User::factory()->state(['name' => 'Ana']))->create();
+        $ben = Rider::factory()->for(User::factory()->state(['name' => 'Ben']))->create();
+        $older = Sale::factory()->for(StockDistribution::factory()->for($ana))->create(['sale_date' => now()->subHour()]);
+        $newer = Sale::factory()->for(StockDistribution::factory()->for($ben))->create(['quantity_sold' => 40, 'total_amount' => 120]);
+
+        $this->getJson(route('api.v1.sales.index'))
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonPath('data.0.id', $newer->id)
+            ->assertJsonPath('data.0.rider.name', 'Ben')
+            ->assertJsonPath('data.0.quantity_sold', 40)
+            ->assertJsonPath('data.0.total_amount', '120.00')
+            ->assertJsonPath('data.1.id', $older->id)
+            ->assertJsonPath('data.1.rider.name', 'Ana')
+            ->assertJsonPath('meta.total', 2);
+    });
+
+    test('sales can be filtered by day and by rider', function () {
+        Sanctum::actingAs(User::factory()->admin()->create());
+        $ana = Rider::factory()->create();
+        $anaStock = StockDistribution::factory()->for($ana)->create();
+        $todaysSale = Sale::factory()->for($anaStock, 'stockDistribution')->create();
+        $yesterdaysSale = Sale::factory()->for($anaStock, 'stockDistribution')->create(['sale_date' => now()->subDay()]);
+        $someoneElsesSale = Sale::factory()->create();
+
+        $this->getJson(route('api.v1.sales.index', ['date' => today()->subDay()->toDateString()]))
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $yesterdaysSale->id);
+
+        $this->getJson(route('api.v1.sales.index', ['rider_id' => $ana->id]))
+            ->assertOk()
+            ->assertJsonCount(2, 'data')
+            ->assertJsonMissing(['id' => $someoneElsesSale->id]);
+
+        $this->getJson(route('api.v1.sales.index', ['rider_id' => $ana->id, 'date' => today()->toDateString()]))
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $todaysSale->id);
+    });
+
+    test('filters must be a valid day and an existing rider', function () {
+        Sanctum::actingAs(User::factory()->admin()->create());
+
+        $this->getJson(route('api.v1.sales.index', ['date' => '17-11-2026', 'rider_id' => 999]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['date', 'rider_id']);
+    });
+
+    test('riders cannot list everyone\'s sales', function () {
+        Sanctum::actingAs(Rider::factory()->create()->user);
+
+        $this->getJson(route('api.v1.sales.index'))->assertForbidden();
+    });
+});

@@ -2,9 +2,18 @@
 
 use App\Http\Controllers\Api\V1\AuthController;
 use App\Http\Controllers\Api\V1\InventoryController;
+use App\Http\Controllers\Api\V1\MyAvailabilityController;
+use App\Http\Controllers\Api\V1\MyLocationController;
+use App\Http\Controllers\Api\V1\MyReturnController;
+use App\Http\Controllers\Api\V1\MySaleController;
+use App\Http\Controllers\Api\V1\MyStockController;
+use App\Http\Controllers\Api\V1\NearbyRidersController;
 use App\Http\Controllers\Api\V1\PandesalPriceController;
+use App\Http\Controllers\Api\V1\PiecesSoldReportController;
 use App\Http\Controllers\Api\V1\ProductionController;
+use App\Http\Controllers\Api\V1\ReportController;
 use App\Http\Controllers\Api\V1\RiderController;
+use App\Http\Controllers\Api\V1\RiderLocationController;
 use App\Http\Controllers\Api\V1\RiderStatusController;
 use App\Http\Controllers\Api\V1\SaleController;
 use App\Http\Controllers\Api\V1\SalesSummaryController;
@@ -18,10 +27,16 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         ->middleware('throttle:login')
         ->name('auth.login');
 
+    // Public (no login): customers find riders near them. Rate limited per device/IP.
+    Route::get('/public/riders/nearby', NearbyRidersController::class)
+        ->middleware('throttle:30,1')
+        ->name('public.riders.nearby');
+
     Route::middleware('auth:sanctum')->group(function () {
         Route::get('/auth/me', [AuthController::class, 'me'])->name('auth.me');
         Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
 
+        Route::get('/riders/locations', RiderLocationController::class)->name('riders.locations');
         Route::apiResource('riders', RiderController::class)->only(['index', 'store']);
         Route::patch('/riders/{rider}/status', [RiderStatusController::class, 'update'])->name('riders.status.update');
 
@@ -36,6 +51,26 @@ Route::prefix('v1')->name('api.v1.')->group(function () {
         Route::apiResource('prices', PandesalPriceController::class)->only(['index', 'store']);
 
         Route::get('/sales/summary', SalesSummaryController::class)->name('sales.summary');
-        Route::apiResource('sales', SaleController::class)->only(['store']);
+        Route::get('/reports/pieces-sold', PiecesSoldReportController::class)->name('reports.pieces-sold');
+        Route::controller(ReportController::class)->prefix('reports')->name('reports.')->group(function () {
+            Route::get('/production', 'production')->name('production');
+            Route::get('/sales', 'sales')->name('sales');
+            Route::get('/inventory', 'inventory')->name('inventory');
+            Route::get('/distribution', 'distribution')->name('distribution');
+            Route::get('/riders', 'riders')->name('riders');
+        });
+
+        // Rider self-service: the signed-in rider's own stock, sales and returns.
+        Route::prefix('me')->name('me.')->group(function () {
+            Route::get('/stock', MyStockController::class)->name('stock');
+            Route::get('/sales', [MySaleController::class, 'index'])->name('sales.index');
+            Route::post('/sales', [MySaleController::class, 'store'])->name('sales.store');
+            Route::post('/returns', [MyReturnController::class, 'store'])->name('returns.store');
+            Route::patch('/availability', [MyAvailabilityController::class, 'update'])->name('availability.update');
+            Route::post('/locations', [MyLocationController::class, 'store'])
+                ->middleware('throttle:60,1')
+                ->name('locations.store');
+        });
+        Route::apiResource('sales', SaleController::class)->only(['index', 'store']);
     });
 });
